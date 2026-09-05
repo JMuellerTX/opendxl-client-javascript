@@ -49,7 +49,16 @@ module.exports = {
       throw new Error('Invalid subject format for csr (' + csrFileName + '): ' +
         result)
     }
-    return subject[1]
+    // OpenSSL 1.0 prints '/CN=client', OpenSSL 1.1 and 3.0 print
+    // 'CN = client' and OpenSSL 3.2+ prints 'CN=client'. Normalize the
+    // output of the newer versions to the 'CN = client' form (and strip a
+    // trailing carriage return on Windows) so that tests can compare against
+    // a single expected value.
+    let subjectText = subject[1].trim()
+    if (subjectText.indexOf('/') !== 0) {
+      subjectText = subjectText.replace(/\s*=\s*/g, ' = ')
+    }
+    return subjectText
   },
   /**
    * Gets all of the subject alternative names from an X509 Certificate Signing
@@ -64,7 +73,7 @@ module.exports = {
       /X509v3 Subject Alternative Name:[^\n]*[\s]*([^\n]*)/)
     let subjectAltNames = []
     if (subjectAltNameExtension) {
-      subjectAltNames = subjectAltNameExtension[1].split(', ')
+      subjectAltNames = subjectAltNameExtension[1].trim().split(', ')
     }
     return subjectAltNames
   },
