@@ -14,17 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [16.x, 18.x, 20.x]  # Updated Node.js versions
+        node-version: [18.x, 20.x, 22.x]
       fail-fast: false
     
     steps:
     - name: Checkout
-      uses: actions/checkout@v3  # Updated to latest version
+      uses: actions/checkout@v4
       with:
         submodules: recursive
         
     - name: Set up Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3  # Updated to latest version
+      uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}       
       
@@ -36,9 +36,6 @@ jobs:
         
     - name: Install dependencies
       run: |
-        sudo -E apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
-        sudo -E apt-get update
-        sudo -E apt-get -yq --no-install-suggests --no-install-recommends install g++-9
         npm install
         
     - name: Configure Client
