@@ -100,7 +100,27 @@ jobs:
           fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\\n');
         "
         echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" > .npmrc
-        npm publish --registry https://npm.pkg.github.com
+        # npm ignores build metadata: +fork.1 and +fork.2 are both version
+        # 0.1.4 to the registry, so the second fork release of the same base
+        # version answers 409 and can never be published. That must not take
+        # the release with it - the tarball on the release page carries the
+        # full version and is the artifact downstream projects install.
+        set +e
+        output="$(npm publish --registry https://npm.pkg.github.com 2>&1)"
+        code=$?
+        set -e
+        echo "$output"
+        if [ "$code" -ne 0 ]; then
+          if echo "$output" | grep -q "Cannot publish over existing version"; then
+            echo "::warning::GitHub Packages already has $(node -p "require('./package.json').version" | sed 's/+.*//') of @$owner/dxl-client."
+            echo "::warning::npm ignores build metadata, so this fork revision cannot be published there."
+            echo "::warning::Use the release tarball; it carries the full version."
+          else
+            mv package.json.orig package.json
+            rm -f .npmrc
+            exit "$code"
+          fi
+        fi
         mv package.json.orig package.json
         rm -f .npmrc
 
