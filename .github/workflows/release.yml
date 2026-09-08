@@ -59,7 +59,9 @@ jobs:
 
     - name: Install and test
       run: |
-        npm ci
+        # `npm ci` is not an option here: package-lock.json is gitignored in this repository,
+        # as it is upstream, so the build workflow installs the same way.
+        npm install
         npm test
 
     - name: Pack the drop-in tarball
