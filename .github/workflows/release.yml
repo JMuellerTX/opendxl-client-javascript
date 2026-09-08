@@ -1,0 +1,150 @@
+name: Release
+
+# Cuts a GitHub release from a tag and publishes the same code to this repository's
+# GitHub Packages npm registry.
+#
+#   git tag -a v0.1.4+fork.1 -m "..." && git push origin v0.1.4+fork.1
+#
+# Two artifacts, deliberately different:
+#
+#   * the tarball on the release page keeps the package name @opendxl/dxl-client, so it drops
+#     into an existing dependency tree - `npm install <tarball url>` replaces the published
+#     0.1.4 and its mqtt 2.x tree without touching any downstream package.json. The version
+#     carries +fork.n as build metadata, which semver ignores when matching ranges: the fork
+#     still satisfies the `^0.1.x` dependency the downstream OpenDXL packages declare, while
+#     `npm ls` shows which one is installed.
+#   * the copy in GitHub Packages has to be scoped to the repository owner - that registry
+#     accepts no other scope - so it is published as @<owner>/dxl-client.
+#
+# Nothing publishes to npmjs.com: the @opendxl scope there belongs to the upstream project.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build the release from"
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.tag || github.ref }}
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.x
+
+    - name: Check the tag against the package version
+      run: |
+        set -eu
+        tag="${{ github.event.inputs.tag || github.ref_name }}"
+        version="$(node -p "require('./package.json').version")"
+        echo "tag=$tag version=$version"
+        [ "${tag#v}" = "$version" ]
+
+    - name: Install and test
+      run: |
+        npm ci
+        npm test
+
+    - name: Pack the drop-in tarball
+      run: |
+        set -eu
+        mkdir -p release
+        npm pack --pack-destination release
+        ls -l release
+
+    - name: Verify the tarball installs and loads
+      run: |
+        set -eu
+        mkdir -p /tmp/smoke && cd /tmp/smoke
+        npm init -y > /dev/null
+        npm install "$GITHUB_WORKSPACE"/release/*.tgz
+        node -e "const c = require('@opendxl/dxl-client'); if (!c.Client) { throw new Error('Client missing') }"
+        node -e "console.log(require('@opendxl/dxl-client/package.json').version)"
+
+    - name: Publish to GitHub Packages
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -eu
+        owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+        # A copy, not the release tarball: GitHub Packages only accepts the owner's scope.
+        cp package.json package.json.orig
+        node -e "
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          p.name = '@$owner/dxl-client';
+          p.publishConfig = { registry: 'https://npm.pkg.github.com' };
+          fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\\n');
+        "
+        echo "//npm.pkg.github.com/:_authToken=\${NODE_AUTH_TOKEN}" > .npmrc
+        npm publish --registry https://npm.pkg.github.com
+        mv package.json.orig package.json
+        rm -f .npmrc
+
+    - name: Checksums
+      run: |
+        cd release
+        sha256sum * > SHA256SUMS
+        cat SHA256SUMS
+
+    - name: Release notes
+      run: |
+        set -eu
+        tag="${{ github.event.inputs.tag || github.ref_name }}"
+        tarball="$(cd release && ls *.tgz)"
+        owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+        {
+          echo "Built from \\`$tag\\` by \\`.github/workflows/release.yml\\`; \\`SHA256SUMS\\` covers the files below."
+          echo
+          echo "**This is the maintained fork, not the upstream package.** It is not on npmjs.com:"
+          echo "the \\`@opendxl\\` scope there belongs to the upstream project."
+          echo
+          echo "    npm install https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$tarball"
+          echo
+          echo "The tarball keeps the name \\`@opendxl/dxl-client\\`, and \\`+fork.n\\` is semver build"
+          echo "metadata, which is ignored when matching ranges - so it satisfies the \\`^0.1.x\\`"
+          echo "dependency the downstream OpenDXL packages declare and replaces the published 0.1.4"
+          echo "with its mqtt 2.x tree in an existing install. \\`npm ls\\` still shows which one it is."
+          echo
+          echo "The same code is also in this repository's GitHub Packages registry as"
+          echo "\\`@$owner/dxl-client\\` - that registry accepts no other scope."
+        } > notes.md
+        cat notes.md
+
+    - name: Publish the release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -eu
+        tag="${{ github.event.inputs.tag || github.ref_name }}"
+        if gh release view "$tag" >/dev/null 2>&1; then
+          gh release upload "$tag" release/* --clobber
+        else
+          gh release create "$tag" release/* --title "$tag" --notes-file notes.md
+        fi
+
+# Publishing under our own name (prepared, not enabled)
+#
+# A public npm release would need a scope of our own (@opendxlclient, once that organisation is
+# registered) - the @opendxl scope belongs to the upstream project. That is a rename in
+# package.json plus an NPM_TOKEN secret; it is deliberately not wired up until it is settled
+# whether these projects keep the opendxl.com identity. Note the trade-off: a differently
+# scoped package no longer satisfies the downstream `@opendxl/dxl-client` dependency, so it
+# buys discovery, not the transitive dependency tree.
