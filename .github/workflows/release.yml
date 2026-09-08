@@ -57,12 +57,16 @@ jobs:
         echo "tag=$tag version=$version"
         [ "${tag#v}" = "$version" ]
 
-    - name: Install and test
+    - name: Install and check
       run: |
         # `npm ci` is not an option here: package-lock.json is gitignored in this repository,
         # as it is upstream, so the build workflow installs the same way.
         npm install
-        npm test
+        # Unit tests only. `npm test` runs the integration suite too, which needs a broker and
+        # a provisioned client configuration - the build workflow does that on every push, and
+        # a release is cut from a commit that has already been through it.
+        npx mocha --recursive test --ignore "test/integration/**"
+        npm run lint
 
     - name: Pack the drop-in tarball
       run: |
