@@ -80,8 +80,8 @@ describe('provisionconfig CLI command @cli', function () {
           port: '8443',
           path: expectedRequestPath,
           auth: 'myuser:mypass',
-          rejectUnauthorized: false,
-          requestCert: false,
+          rejectUnauthorized: true,
+          requestCert: true,
           headers: { cookie: expectedCookie }
         }).to.eql(actualRequestData)
         // Validate that the 'client certificate' returned by the management
@@ -167,6 +167,42 @@ describe('provisionconfig CLI command @cli', function () {
     command.parse(cliArgs(['-t', '9443', '-e', trustedCaCert, '-u', 'myuser',
       '-p', 'mypass', 'myhost', 'client']))
   })
+
+  it('should not validate the management server cert with --insecure',
+    function (done) {
+      stubProvisionCommand()
+      const command = cliHelpers.cliCommand(
+        function (error) {
+          expect(error).to.be.null
+          const caBundleFileName = path.join(tmpDir, 'ca-bundle.crt')
+          expect(fs.existsSync(caBundleFileName)).to.be.true
+          const actualRequestData = JSON.parse(querystring.unescape(
+            fs.readFileSync(caBundleFileName)))
+          expect(actualRequestData).to.have.property(
+            'rejectUnauthorized', false)
+          expect(actualRequestData).to.have.property('requestCert', false)
+          expect(actualRequestData).to.not.have.property('ca')
+          done()
+        }
+      )
+      command.parse(cliArgs(['-u', 'myuser', '-p', 'mypass', '--insecure',
+        'myhost', 'client']))
+    })
+
+  it('should reject the truststore and insecure options together',
+    function (done) {
+      const trustedCaCert = path.join(tmpDir, 'trustedca.crt')
+      fs.writeFileSync(trustedCaCert, 'fakecacert')
+      const command = cliHelpers.cliCommand(
+        function (error) {
+          expect(error).to.be.an.instanceof(DxlError)
+          expect(error.message).to.contain('cannot be used together')
+          done()
+        }
+      )
+      command.parse(cliArgs(['-u', 'myuser', '-p', 'mypass', '-e',
+        trustedCaCert, '--insecure', 'myhost', 'client']))
+    })
 
   it('should prompt for server username and password options with no value',
     function (done) {

@@ -88,17 +88,37 @@ Saving ca bundle file to config/ca-bundle.crt
 Saving client certificate file to config/theclient.crt
 ```
 
+### Validating the Management Server Certificate
+
+The `provisionconfig` and `updateconfig` commands validate the management
+server's TLS certificate, including its host name, against the certificate
+authorities which Node.js trusts by default. Credentials are sent to the
+management server, so this is on by default and there are two ways to adjust
+it.
+
 If the management server's CA certificate is stored in a local CA truststore
 file &mdash; one or more PEM-formatted certificates concatenated together into a
-single file &mdash; the provision operation can be configured to validate the
-management server's certificate against that truststore during TLS session
-negotiation by supplying the `-e` option.
-
-The name of the truststore file should be supplied along with the option:
+single file &mdash; supply that file with the `-e` option. The server
+certificate is then validated against it instead of against the default CAs:
 
 ```sh
 node_modules/.bin/dxlclient provisionconfig config myserver -e config/ca-bundle.crt
 ```
+
+The host name is still checked, so the name used on the command line has to
+match the certificate's Common Name or a Subject Alternative Name. Certificates
+issued by an OpenDXL broker are typically `CN=localhost` without any SAN, so
+connect by that name rather than by IP address.
+
+For a throwaway broker, a lab, or a CI job, validation can be switched off
+entirely with `--insecure`:
+
+```sh
+node_modules/.bin/dxlclient provisionconfig config myserver --insecure
+```
+
+This prints a warning and leaves the connection open to interception, so it is
+not meant for production use. `-e` and `--insecure` cannot be combined.
 
 ### Generating the CSR Separately from Signing the Certificate
 

@@ -41,7 +41,7 @@ jobs:
         
     - name: Configure Client
       run: |
-        bin/dxlclient.js provisionconfig -u admin -p password test/integration 127.0.0.1 client
+        bin/dxlclient.js provisionconfig --insecure -u admin -p password test/integration 127.0.0.1 client
         cp test/integration/dxlclient.config test/integration/client_config.cfg
         cat test/integration/client_config.cfg
         

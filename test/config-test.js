@@ -381,8 +381,8 @@ describe('Config', function () {
               port: '8443',
               path: expectedRequestPath,
               auth: 'myuser:mypass',
-              rejectUnauthorized: false,
-              requestCert: false,
+              rejectUnauthorized: true,
+              requestCert: true,
               headers: { cookie: expectedCookie }
             }).to.eql(actualRequestData)
             // Validate that the 'client certificate' returned by the management

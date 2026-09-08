@@ -121,8 +121,8 @@ describe('updateconfig CLI command @cli', function () {
           hostname: 'somehost',
           port: '8443',
           auth: 'admin:password',
-          rejectUnauthorized: false,
-          requestCert: false,
+          rejectUnauthorized: true,
+          requestCert: true,
           headers: { cookie: expectedCookie }
         }
         const caBundleRequest = JSON.parse(querystring.unescape(fs.readFileSync(
