@@ -58,5 +58,27 @@ describe('Broker', function () {
         expect(broker.port).to.equal(8993)
       })
     })
+
+    context('with invalid broker URLs', function () {
+      const MalformedBrokerError = require('..').MalformedBrokerError
+
+      it('should throw MalformedBrokerError for an empty host', function () {
+        expect(function () {
+          Broker.parse('')
+        }).to.throw(MalformedBrokerError)
+        expect(function () {
+          Broker.parse('ssl://')
+        }).to.throw(MalformedBrokerError)
+      })
+
+      it('should throw MalformedBrokerError for unbracketed IPv6', function () {
+        expect(function () {
+          Broker.parse('::1')
+        }).to.throw(MalformedBrokerError)
+        expect(function () {
+          Broker.parse('ff02::1:8993')
+        }).to.throw(MalformedBrokerError)
+      })
+    })
   })
 })
